@@ -1,0 +1,47 @@
+{
+  "name": "pgsqlio",
+  "version": "0.1.0",
+  "description": "Interactive PostgreSQL dump, restore, and cleanup CLI (OpenTUI)",
+  "type": "module",
+  "bin": {
+    "pgsqlio": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "bun src/cli.ts",
+    "start": "bun dist/cli.js",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "bun": ">=1.3.0",
+    "node": ">=26.4.0"
+  },
+  "keywords": [
+    "postgresql",
+    "postgres",
+    "pg_dump",
+    "backup",
+    "restore",
+    "cli",
+    "opentui",
+    "tui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kingRayhan/pg_backup.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@opentui/core": "0.3.4",
+    "opentui-spinner": "0.0.7"
+  }
+}

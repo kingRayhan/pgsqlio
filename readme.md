@@ -1,72 +1,119 @@
-# PostgreSQL Backup & Restore Script
+# pgsqlio
 
-A lightweight shell script to **dump** (export) and **restore** (import) PostgreSQL databases using a connection URL.
+Interactive CLI for PostgreSQL dump, restore, cleanup, and dropping databases.
 
-## ✨ Features
-- Accepts **PostgreSQL connection URL** (`postgresql://user:password@host:port/dbname`)
-- Automatically generates timestamped backup files
-- Supports **database restore** from `.sql` files
-- Works with any PostgreSQL server (local or remote)
-- Requires only `pg_dump` and `psql`
+```bash
+npx pgsqlio
+# or
+bunx pgsqlio
+```
+
+![pgsqlio](./assets/cli.png)
+
+Requires [Bun](https://bun.sh) ≥ 1.3 (recommended) or Node.js ≥ 26.4, plus `pg_dump` and `psql` on your `PATH`.
 
 ---
 
-## 📦 Requirements
-- [PostgreSQL Client Tools](https://www.postgresql.org/download/) (`pg_dump`, `psql`)
-- Bash shell (Linux/Mac; Windows users can use WSL or Git Bash)
+## Quick start
+
+```bash
+npx pgsqlio
+```
+
+You’ll get a terminal UI with sticky branding and a menu. Use ↑/↓ and Enter. Esc goes back. Ctrl+C quits.
+
+Connection URLs work with or without a database name:
+
+```text
+postgresql://user:password@host:5432
+postgresql://user:password@host:5432/mydb
+postgresql://postgres@127.0.0.1
+```
 
 ---
 
-## ⚙️ Installation
-Clone the repository or copy the script:
+## Commands (interactive menu)
 
-```bash
-git clone https://github.com/yourusername/pg-backup-script.git
-cd pg-backup-script
-chmod +x pg_backup.sh
+There are no subcommands — start `pgsqlio` and pick an action.
+
+### Dump
+
+Backup one or more databases.
+
+1. Enter connection URL
+2. **All databases** or **Select databases**
+3. If multiple: **Separate files** or **Single file**
+4. Watch per-database progress
+
+| Mode     | Output                                |
+| -------- | ------------------------------------- |
+| Separate | `backup_<dbname>_YYYYMMDD_HHMMSS.sql` |
+| Single   | `backup_combined_YYYYMMDD_HHMMSS.sql` |
+
+Combined files create missing databases on restore and switch with `\connect`. Dumps include `--clean --if-exists`.
+
+---
+
+### Restore
+
+Import a `.sql` backup.
+
+1. Enter connection URL
+2. Enter path to the `.sql` file
+3. Choose how to apply:
+
+| Option                         | When to use                                               |
+| ------------------------------ | --------------------------------------------------------- |
+| **Wipe schemas, then restore** | Target already has objects / retry after a failed restore |
+| **Restore as-is**              | Empty databases                                           |
+
+Combined dumps: missing DBs are created automatically, then the file is loaded.
+
+---
+
+### Cleanup
+
+Empty one database’s `public` schema (keeps the database).
+
+1. Enter URL **including** `/dbname`
+2. Confirm
+
+Runs:
+
+```sql
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
 ```
 
-## 🚀 Usage
-Dump (Backup) Database
-```bash
-./pg_backup.sh dump "postgresql://user:password@host:6543/dbname"
-```
+---
 
-This creates a file like:
-```bash
-backup_20250924_121530.sql
-```
+### Drop databases
 
-Restore Database
-```bash
-./pg_backup.sh restore "postgresql://user:password@host:6543/dbname" backup_20250924_121530.sql
-```
+Permanently delete selected databases.
 
+1. Enter connection URL
+2. Select databases (checkboxes)
+3. Confirm
 
-## 📝 Example
-```bash
-# Dump database
-./pg_backup.sh dump "postgresql://postgres:secret@localhost:5432/mydb"
+Active connections are terminated first. `postgres` and `template*` cannot be dropped.
 
-# Restore database
-./pg_backup.sh restore "postgresql://postgres:secret@localhost:5432/mydb" backup_20250924_121530.sql
-```
+---
 
-## Cleanup Database (⚠️ destructive):
-```bash
-./pg_backup.sh cleanup "postgresql://user:password@host:6543/dbname"
-```
+## Keyboard
 
+| Key    | Action             |
+| ------ | ------------------ |
+| ↑ / ↓  | Move               |
+| Enter  | Confirm            |
+| Space  | Toggle checkbox    |
+| a      | Select all (lists) |
+| Esc    | Back               |
+| Ctrl+C | Quit               |
 
-### 💡 Notes
-The DB user in the connection URL must have proper permissions.
-Backups are stored as plain SQL files (human-readable).
+---
 
-You can compress backups manually if needed:
-```bash
-# Create compressed backup
-pg_dump "db_url" | gzip > backup.sql.gz
+## Notes
 
-# Restore from compressed backup
-gunzip -c backup.sql.gz | psql "db_url"
-```
+- Use a role with rights to dump, create, and drop as needed.
+- Prefer **Wipe schemas, then restore** if you see “already exists” errors.
+- Host-only URLs (no `/dbname`) are fine for Dump / Drop; Cleanup needs a specific database in the URL.
