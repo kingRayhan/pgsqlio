@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 export function requireBin(name: string): void {
   const result = spawnSync(name, ["--version"], { encoding: "utf8" });
@@ -77,6 +77,29 @@ export function runCapture(
   };
 }
 
+export function runCaptureAsync(
+  cmd: string,
+  args: string[],
+): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    child.on("error", (error) => {
+      resolve({ ok: false, stdout: "", stderr: error.message });
+    });
+    child.on("close", (code) => {
+      resolve({
+        ok: code === 0,
+        stdout: Buffer.concat(out).toString("utf8").trim(),
+        stderr: Buffer.concat(err).toString("utf8").trim(),
+      });
+    });
+  });
+}
+
 /** Ensure URL has a database path (defaults to postgres). */
 export function normalizeConnUrl(url: string): string {
   const [base, query] = url.split("?");
@@ -107,9 +130,26 @@ export function timestamp(): string {
   );
 }
 
-export function listDatabases(dbUrl: string): { ok: boolean; databases: string[]; error?: string } {
+export async function pingConnection(
+  dbUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
   const url = normalizeConnUrl(dbUrl);
-  const { ok, stdout, stderr } = runCapture("psql", [
+  const { ok, stdout, stderr } = await runCaptureAsync("psql", [
+    url,
+    "-Atc",
+    "SELECT 1",
+  ]);
+  if (!ok) {
+    return { ok: false, error: stderr || stdout || "Connection failed" };
+  }
+  return { ok: true };
+}
+
+export async function listDatabases(
+  dbUrl: string,
+): Promise<{ ok: boolean; databases: string[]; error?: string }> {
+  const url = normalizeConnUrl(dbUrl);
+  const { ok, stdout, stderr } = await runCaptureAsync("psql", [
     url,
     "-Atc",
     "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;",

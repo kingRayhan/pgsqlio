@@ -11,7 +11,7 @@ import {
 } from "@opentui/core";
 import { SpinnerRenderable } from "opentui-spinner";
 import { getContent } from "./branding.js";
-import { normalizeConnUrl } from "../utils.js";
+import { listDatabases, normalizeConnUrl, pingConnection } from "../utils.js";
 
 export type FlowResult = "ok" | "fail" | "back";
 export const BACK = "__back__" as const;
@@ -250,6 +250,10 @@ export function promptSelect<T extends string>(
   });
 }
 
+function yieldFrame(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 export function promptText(
   renderer: CliRenderer,
   options: {
@@ -259,7 +263,9 @@ export function promptText(
     initial?: string;
     hint?: string;
     maxLength?: number;
+    busyMessage?: string;
     validate?: (value: string) => string | null;
+    verify?: (value: string) => Promise<string | null>;
   },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -285,28 +291,51 @@ export function promptText(
       }),
     );
 
-    const error = new TextRenderable(renderer, {
-      id: "text-error",
-      content: "",
-      fg: "#FF6666",
-      height: 1,
+    const inputFrame = new BoxRenderable(renderer, {
+      id: "text-input-frame",
+      width: "100%",
+      padding: 1,
+      backgroundColor: "#2A2A2A",
     });
 
     const input = new InputRenderable(renderer, {
       id: "text-input",
       width: "100%",
-      height: 1,
       placeholder: options.placeholder ?? "",
       value: options.initial?.trim() ?? "",
       maxLength: options.maxLength ?? 2000,
-      backgroundColor: "#1A1A1A",
+      backgroundColor: "#2A2A2A",
       focusedBackgroundColor: "#2A2A2A",
       textColor: "#FFFFFF",
       cursorColor: "#88CCFF",
     });
 
-    panel.add(input);
-    panel.add(error);
+    inputFrame.add(input);
+
+    const statusRow = new BoxRenderable(renderer, {
+      id: "text-status-row",
+      flexDirection: "row",
+      alignItems: "center",
+      width: "100%",
+      height: 1,
+    });
+    const spin = new SpinnerRenderable(renderer, {
+      name: "dots",
+      color: "#88CCFF",
+      autoplay: false,
+    });
+    spin.visible = false;
+    const statusText = new TextRenderable(renderer, {
+      id: "text-status",
+      content: "",
+      fg: "#FF6666",
+      marginLeft: 1,
+    });
+    statusRow.add(spin);
+    statusRow.add(statusText);
+
+    panel.add(inputFrame);
+    panel.add(statusRow);
     panel.add(
       new TextRenderable(renderer, {
         id: "text-hint",
@@ -318,24 +347,72 @@ export function promptText(
     content.add(panel);
     input.focus();
 
-    const submit = (value: string) => {
+    let busy = false;
+    let cancelled = false;
+
+    const setBusy = (on: boolean, message = "") => {
+      busy = on;
+      if (on) {
+        spin.visible = true;
+        spin.start();
+        statusText.content = message;
+        statusText.fg = "#CCCCCC";
+      } else {
+        spin.stop();
+        spin.visible = false;
+        statusText.content = "";
+      }
+    };
+
+    const setError = (msg: string) => {
+      spin.stop();
+      spin.visible = false;
+      busy = false;
+      statusText.content = msg;
+      statusText.fg = "#FF6666";
+      input.focus();
+    };
+
+    const submit = async (value: string) => {
+      if (busy) return;
       const trimmed = value.trim();
       if (!trimmed) {
-        error.content = "Value is required";
+        setError("Value is required");
         return;
       }
       if (options.validate) {
         const msg = options.validate(trimmed);
         if (msg) {
-          error.content = msg;
+          setError(msg);
           return;
         }
+      }
+      if (options.verify) {
+        setBusy(true, options.busyMessage ?? "Working…");
+        input.blur();
+        await yieldFrame();
+        try {
+          const msg = await options.verify(trimmed);
+          if (cancelled) return;
+          if (msg) {
+            setError(msg);
+            return;
+          }
+        } catch (err) {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Failed");
+          return;
+        }
+        if (cancelled) return;
+        setBusy(false);
       }
       cleanup();
       resolve(trimmed);
     };
 
-    const onEnter = (value: string) => submit(value);
+    const onEnter = (value: string) => {
+      void submit(value);
+    };
     const onKey = (key: KeyEvent) => {
       if (key.name === "escape") {
         cleanup();
@@ -344,6 +421,9 @@ export function promptText(
     };
 
     const cleanup = () => {
+      cancelled = true;
+      busy = false;
+      spin.stop();
       input.off(InputRenderableEvents.ENTER, onEnter);
       renderer.keyInput.off("keypress", onKey);
     };
@@ -356,19 +436,62 @@ export function promptText(
 export function promptDbUrl(
   renderer: CliRenderer,
   title: string,
-  initial?: string,
+  options?: {
+    initial?: string;
+    busyMessage?: string;
+    verify?: (url: string) => Promise<string | null>;
+  },
 ): Promise<string> {
+  const verify =
+    options?.verify ??
+    (async (url: string) => {
+      const ping = await pingConnection(url);
+      return ping.ok ? null : ping.error ?? "Connection failed";
+    });
+
   return promptText(renderer, {
     title,
     label: "PostgreSQL connection URL",
     placeholder: "postgresql://user:password@host:5432",
-    initial,
+    initial: options?.initial,
     hint: "Enter confirm · Esc back · database name optional (you can pick next)",
+    busyMessage: options?.busyMessage ?? "Connecting…",
     validate: (value) =>
       looksLikePgUrl(value)
         ? null
         : "URL must start with postgresql:// or postgres://",
+    verify: (value) => verify(normalizeConnUrl(value)),
   }).then(normalizeConnUrl);
+}
+
+/** Prompt for a URL and fetch the database list on the same screen. */
+export async function promptDbUrlAndDatabases(
+  renderer: CliRenderer,
+  title: string,
+  options?: {
+    initial?: string;
+    emptyMessage?: string;
+    filter?: (name: string) => boolean;
+  },
+): Promise<{ url: string; databases: string[] }> {
+  let databases: string[] = [];
+  const url = await promptDbUrl(renderer, title, {
+    initial: options?.initial,
+    busyMessage: "Fetching databases…",
+    verify: async (value) => {
+      const listed = await listDatabases(value);
+      if (!listed.ok) return listed.error ?? "Connection failed";
+      const next = options?.filter
+        ? listed.databases.filter(options.filter)
+        : listed.databases;
+      if (next.length === 0) {
+        return options?.emptyMessage ?? "No databases found";
+      }
+      databases = next;
+      return null;
+    },
+  });
+  return { url, databases };
 }
 
 export async function waitForEnter(
@@ -481,6 +604,7 @@ export async function withSpinner<T>(
     }),
   );
   content.add(panel);
+  await yieldFrame();
   try {
     return await work();
   } finally {

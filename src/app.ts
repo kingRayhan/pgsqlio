@@ -54,7 +54,8 @@ export async function runApp(): Promise<void> {
       if (action === "dump") await runDumpFlow(renderer);
       else if (action === "restore") await runRestoreFlow(renderer);
       else if (action === "cleanup") await runCleanupFlow(renderer);
-      else if (action === "drop-databases") await runDropDatabasesFlow(renderer);
+      else if (action === "drop-databases")
+        await runDropDatabasesFlow(renderer);
     }
   } finally {
     renderer.destroy();

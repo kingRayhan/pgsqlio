@@ -1,19 +1,8 @@
-import {
-  BoxRenderable,
-  TextRenderable,
-  type CliRenderer,
-} from "@opentui/core";
-import { SpinnerRenderable } from "opentui-spinner";
-import {
-  dropDatabases,
-  listDatabases,
-  normalizeConnUrl,
-  requireBin,
-} from "../utils.js";
+import type { CliRenderer } from "@opentui/core";
+import { dropDatabases, requireBin } from "../utils.js";
 import {
   BACK,
-  clearContent,
-  promptDbUrl,
+  promptDbUrlAndDatabases,
   promptMultiSelect,
   promptSelect,
   showStatus,
@@ -27,62 +16,21 @@ export async function runDropDatabasesFlow(
   requireBin("psql");
 
   let connUrl: string;
+  let droppable: string[];
   try {
-    connUrl = await promptDbUrl(renderer, "pgsqlio · drop databases");
+    const listed = await promptDbUrlAndDatabases(
+      renderer,
+      "pgsqlio · drop databases",
+      {
+        filter: (name) => name !== "postgres" && !name.startsWith("template"),
+        emptyMessage:
+          "No droppable databases found (postgres / template* are protected)",
+      },
+    );
+    connUrl = listed.url;
+    droppable = listed.databases;
   } catch {
     return "back";
-  }
-  connUrl = normalizeConnUrl(connUrl);
-
-  const loadingWrap = clearContent(renderer);
-  const spin = new SpinnerRenderable(renderer, {
-    id: "db-spin",
-    name: "dots",
-    color: "#88CCFF",
-  });
-  const loading = new BoxRenderable(renderer, {
-    id: "db-loading",
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 1,
-    flexGrow: 1,
-  });
-  loading.add(spin);
-  loading.add(
-    new TextRenderable(renderer, {
-      content: " Fetching databases…",
-      fg: "#CCCCCC",
-      marginLeft: 1,
-    }),
-  );
-  loadingWrap.add(loading);
-
-  const listed = listDatabases(connUrl);
-  spin.stop();
-
-  if (!listed.ok) {
-    await showStatus(renderer, {
-      title: "pgsqlio · drop databases",
-      message: "❌ Could not list databases",
-      ok: false,
-      detail: listed.error,
-    });
-    return "fail";
-  }
-
-  // Never offer to drop postgres / template DBs from this UI
-  const droppable = listed.databases.filter(
-    (name) => name !== "postgres" && !name.startsWith("template"),
-  );
-
-  if (droppable.length === 0) {
-    await showStatus(renderer, {
-      title: "pgsqlio · drop databases",
-      message: "No droppable databases found",
-      ok: false,
-      detail: "postgres / template* are protected",
-    });
-    return "fail";
   }
 
   const selected = await promptMultiSelect(renderer, {

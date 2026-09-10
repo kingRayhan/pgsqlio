@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const { runApp } = await import("./app.js");
+  const { runApp } = await import("./app");
   await runApp();
 }
 

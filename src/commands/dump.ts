@@ -8,11 +8,11 @@ import {
   type KeyEvent,
 } from "@opentui/core";
 import { SpinnerRenderable } from "opentui-spinner";
-import { listDatabases, replaceDbInUrl, requireBin, timestamp } from "../utils.js";
+import { replaceDbInUrl, requireBin, timestamp } from "../utils.js";
 import {
   BACK,
   clearContent,
-  promptDbUrl,
+  promptDbUrlAndDatabases,
   promptMultiSelect,
   promptSelect,
   type FlowResult,
@@ -243,53 +243,13 @@ export async function runDumpFlow(renderer: CliRenderer): Promise<FlowResult> {
   requireBin("pg_dump");
 
   let dbUrl: string;
+  let databases: string[];
   try {
-    dbUrl = await promptDbUrl(renderer, "pgsqlio · dump");
+    const listed = await promptDbUrlAndDatabases(renderer, "pgsqlio · dump");
+    dbUrl = listed.url;
+    databases = listed.databases;
   } catch {
     return "back";
-  }
-
-  const content = clearContent(renderer);
-  const loading = new BoxRenderable(renderer, {
-    id: "loading",
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 1,
-    flexGrow: 1,
-  });
-  const spin = new SpinnerRenderable(renderer, {
-    id: "loading-spin",
-    name: "dots",
-    color: "#88CCFF",
-  });
-  loading.add(spin);
-  loading.add(
-    new TextRenderable(renderer, {
-      id: "loading-text",
-      content: " Fetching database list…",
-      fg: "#CCCCCC",
-      marginLeft: 1,
-    }),
-  );
-  content.add(loading);
-
-  const listed = listDatabases(dbUrl);
-  spin.stop();
-  const databases = listed.databases;
-
-  if (!listed.ok || databases.length === 0) {
-    const failContent = clearContent(renderer);
-    failContent.add(
-      new TextRenderable(renderer, {
-        content: listed.ok
-          ? "❌ No databases found"
-          : `❌ Connection failed: ${listed.error ?? "unknown error"}`,
-        fg: "#FF6666",
-        padding: 1,
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 2000));
-    return "fail";
   }
 
   let selected: string[] | undefined;
