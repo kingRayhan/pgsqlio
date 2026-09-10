@@ -1,6 +1,6 @@
 {
   "name": "pgsqlio",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Interactive PostgreSQL dump, restore, and cleanup CLI (OpenTUI)",
   "type": "module",
   "bin": {
@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kingRayhan/pg_backup.git"
+    "url": "git+https://github.com/kingRayhan/pgsqlio.git"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",
