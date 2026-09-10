@@ -1,28 +1,37 @@
 # pgsqlio
 
-Interactive CLI for PostgreSQL dump, restore, cleanup, and dropping databases.
+**Backup and restore PostgreSQL from a terminal menu.**
+
+Paste a connection URL. Pick dump, restore, cleanup, or drop. No flags to memorize, no subcommands to look up.
 
 ```bash
-npx pgsqlio
-# or
 bunx pgsqlio
+# or
+npx pgsqlio
 ```
 
 ![pgsqlio](./assets/cli.png)
 
-Requires [Bun](https://bun.sh) ≥ 1.3 (recommended) or Node.js ≥ 26.4, plus `pg_dump` and `psql` on your `PATH`.
+You need `pg_dump` and `psql` on your `PATH` (the PostgreSQL client tools), plus [Bun](https://bun.sh) 1.3+ or Node.js 26.4+.
 
 ---
 
-## Quick start
+## What you can do
 
-```bash
-bunx pgsqlio
-```
+| | |
+| --- | --- |
+| **Dump** | Back up one database or many, into separate files or one combined file |
+| **Restore** | Load a `.sql` backup — wipe first if the target already has tables |
+| **Cleanup** | Empty a database’s `public` schema without dropping the database itself |
+| **Drop** | Pick databases from a list and delete them for good |
 
-You’ll get a terminal UI with sticky branding and a menu. Use ↑/↓ and Enter. Esc goes back. Ctrl+C quits.
+Start `pgsqlio`, then choose from the menu. Arrow keys move, Enter confirms, Esc goes back, Ctrl+C quits.
 
-Connection URLs work with or without a database name:
+---
+
+## Connection URL
+
+Host-only URLs are fine for dump and drop. Cleanup needs a database name on the URL.
 
 ```text
 postgresql://user:password@host:5432
@@ -30,55 +39,49 @@ postgresql://user:password@host:5432/mydb
 postgresql://postgres@127.0.0.1
 ```
 
+If the connection fails, the error stays under the field so you can fix the URL and try again.
+
 ---
 
-## Commands (interactive menu)
+## Dump
 
-There are no subcommands — start `pgsqlio` and pick an action.
+1. Paste the URL
+2. Dump **all databases**, or pick from a list
+3. If you picked more than one: **separate files** or **one combined file**
+4. Watch each database finish
 
-### Dump
-
-Backup one or more databases.
-
-1. Enter connection URL
-2. **All databases** or **Select databases**
-3. If multiple: **Separate files** or **Single file**
-4. Watch per-database progress
-
-| Mode     | Output                                |
-| -------- | ------------------------------------- |
+| Mode | File you get |
+| --- | --- |
 | Separate | `backup_<dbname>_YYYYMMDD_HHMMSS.sql` |
-| Single   | `backup_combined_YYYYMMDD_HHMMSS.sql` |
+| Combined | `backup_combined_YYYYMMDD_HHMMSS.sql` |
 
-Combined files create missing databases on restore and switch with `\connect`. Dumps include `--clean --if-exists`.
-
----
-
-### Restore
-
-Import a `.sql` backup.
-
-1. Enter connection URL
-2. Enter path to the `.sql` file
-3. Choose how to apply:
-
-| Option                         | When to use                                               |
-| ------------------------------ | --------------------------------------------------------- |
-| **Wipe schemas, then restore** | Target already has objects / retry after a failed restore |
-| **Restore as-is**              | Empty databases                                           |
-
-Combined dumps: missing DBs are created automatically, then the file is loaded.
+Combined files create missing databases on restore and switch between them with `\connect`. Dumps include `--clean --if-exists`, so restore can replace objects that already exist.
 
 ---
 
-### Cleanup
+## Restore
 
-Empty one database’s `public` schema (keeps the database).
+1. Paste the URL
+2. Enter the path to the `.sql` file
+3. Choose how to apply it
 
-1. Enter URL **including** `/dbname`
+| Option | Use it when |
+| --- | --- |
+| **Wipe schemas, then restore** | The target already has tables, or a previous restore failed with “already exists” |
+| **Restore as-is** | The databases are empty |
+
+Combined dumps create any missing databases, then load the file.
+
+---
+
+## Cleanup
+
+Empties one database’s `public` schema. The database itself stays.
+
+1. Paste a URL **with** `/dbname`
 2. Confirm
 
-Runs:
+This runs:
 
 ```sql
 DROP SCHEMA public CASCADE;
@@ -87,33 +90,33 @@ CREATE SCHEMA public;
 
 ---
 
-### Drop databases
+## Drop databases
 
-Permanently delete selected databases.
+Permanently deletes the databases you select.
 
-1. Enter connection URL
-2. Select databases (checkboxes)
+1. Paste the URL
+2. Check the databases to drop
 3. Confirm
 
-Active connections are terminated first. `postgres` and `template*` cannot be dropped.
+Active connections are kicked first so the drop can proceed. `postgres` and `template*` are protected and will not appear in the list.
 
 ---
 
 ## Keyboard
 
-| Key    | Action             |
-| ------ | ------------------ |
-| ↑ / ↓  | Move               |
-| Enter  | Confirm            |
-| Space  | Toggle checkbox    |
-| a      | Select all (lists) |
-| Esc    | Back               |
-| Ctrl+C | Quit               |
+| Key | Action |
+| --- | --- |
+| ↑ / ↓ | Move |
+| Enter | Confirm |
+| Space | Toggle a checkbox |
+| a | Select all (on lists) |
+| Esc | Back |
+| Ctrl+C | Quit |
 
 ---
 
-## Notes
+## Good to know
 
-- Use a role with rights to dump, create, and drop as needed.
-- Prefer **Wipe schemas, then restore** if you see “already exists” errors.
-- Host-only URLs (no `/dbname`) are fine for Dump / Drop; Cleanup needs a specific database in the URL.
+- Use a role that can dump, create, and drop, depending on what you plan to do.
+- Host-only URLs work for dump and drop. Cleanup needs `/dbname` on the URL.
+- Prefer **Wipe schemas, then restore** if restore complains that objects already exist.
