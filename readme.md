@@ -17,7 +17,7 @@ Requires [Bun](https://bun.sh) ≥ 1.3 (recommended) or Node.js ≥ 26.4, plus `
 ## Quick start
 
 ```bash
-npx pgsqlio
+bunx pgsqlio
 ```
 
 You’ll get a terminal UI with sticky branding and a menu. Use ↑/↓ and Enter. Esc goes back. Ctrl+C quits.
