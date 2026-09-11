@@ -4,10 +4,10 @@ import {
   TextRenderable,
   type CliRenderer,
 } from "@opentui/core";
+import { VERSION } from "../version.js";
 
 export const SHELL_ID = "app-shell";
 export const CONTENT_ID = "app-content";
-const VERSION = "0.1.0";
 
 function createHeader(renderer: CliRenderer): BoxRenderable {
   const header = new BoxRenderable(renderer, {

@@ -1,6 +1,6 @@
 {
   "name": "pgsqlio",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Interactive PostgreSQL dump, restore, and cleanup CLI (OpenTUI)",
   "type": "module",
   "bin": {
